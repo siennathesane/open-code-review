@@ -486,4 +486,4 @@ ocr review --preview
 ocr review --commit 42
 ```
 
-Git に戻すには `ocr config unset vcs_provider` を実行します。Lore は作業ツリーのスキャンと変更前後のファイル読み取りに対応しています。共通祖先を基準とする比較（`--from/--to`）と `code_search` ツールには現在対応していません。
+Git に戻すには `ocr config unset vcs_provider` を実行します。Lore は作業ツリーのスキャン、リビジョン範囲のレビュー（`--from/--to`、共通祖先の概念がないため直接比較し、両端点間の全リビジョンを 1 つの変更セットにまとめます）、変更前後のファイル読み取りに対応しています。`code_search` ツールには現在対応していません。

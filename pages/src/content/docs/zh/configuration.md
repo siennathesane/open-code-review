@@ -442,4 +442,4 @@ ocr review --preview
 ocr review --commit 42
 ```
 
-执行 `ocr config unset vcs_provider` 可切回 Git。Lore 支持工作区扫描和变更前后的文件读取。目前暂不支持基于共同祖先的 `--from/--to` 比较和 `code_search` 工具。
+执行 `ocr config unset vcs_provider` 可切回 Git。Lore 支持工作区扫描、修订范围审阅（`--from/--to`，直接比较——Lore 没有共同祖先概念，两端点之间的所有修订会合并为一个变更集）以及变更前后的文件读取。目前暂不支持 `code_search` 工具。

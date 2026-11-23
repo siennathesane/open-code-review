@@ -140,13 +140,20 @@ func (r *Repository) CurrentBranch(ctx context.Context) (string, error) {
 	return rev.BranchName, err
 }
 
+// ResolveReview pins the requested endpoints once, before any diff or context
+// read. A --from/--to request flattens every revision between the endpoints
+// into a single changeset. When both endpoints name branches, Lore's own
+// common-ancestor computation (`branch diff`) selects the comparison base;
+// otherwise the endpoints are revisions (numbers or signatures) compared
+// directly, since Lore revision numbers are repository-global. A single
+// revision compares against its first parent.
 func (r *Repository) ResolveReview(ctx context.Context, spec vcs.ReviewSpec) (vcs.ResolvedReview, error) {
 	var out vcs.ResolvedReview
 	if err := spec.Validate(); err != nil {
 		return out, err
 	}
 	if spec.Mode == vcs.MergeBase {
-		return out, fmt.Errorf("%w: Lore does not support merge-base review; use --commit or review the working tree", vcs.ErrUnsupported)
+		return r.resolveMergeBase(ctx, spec)
 	}
 	rev, err := r.revision(ctx, spec.Head)
 	if err != nil {
@@ -171,5 +178,114 @@ func (r *Repository) ResolveReview(ctx context.Context, spec vcs.ReviewSpec) (vc
 	if out.Base == zeroRevision {
 		out.Base, out.BaseIsEmpty = "", true
 	}
+	return out, nil
+}
+
+// resolveMergeBase resolves a --from/--to pair. The endpoints are classified
+// first, by listing branches: when both names are branches, `lore branch diff`
+// reports their common ancestor and the source branch head, and every failure
+// of that computation surfaces — it is never substituted with a different
+// comparison. A pair with no common ancestor is an error, matching the Git
+// provider. When at least one name is not a branch, both endpoints resolve as
+// revisions (numbers or signatures) and compare directly, so an explicit fork
+// revision keeps working.
+func (r *Repository) resolveMergeBase(ctx context.Context, spec vcs.ReviewSpec) (vcs.ResolvedReview, error) {
+	var out vcs.ResolvedReview
+	for _, name := range []string{spec.Base, spec.Head} {
+		if strings.HasPrefix(name, "-") {
+			return out, fmt.Errorf("invalid Lore name %q", name)
+		}
+	}
+	branches, err := r.branchNames(ctx)
+	if err != nil {
+		// Without the branch listing the classification cannot happen at all, so
+		// neither resolution path is justified; report instead of guessing.
+		return out, fmt.Errorf("resolve Lore range %q..%q: %w", spec.Base, spec.Head, err)
+	}
+	if branches[spec.Base] && branches[spec.Head] {
+		return r.resolveBranchRange(ctx, spec)
+	}
+	head, err := r.revision(ctx, spec.Head)
+	if err != nil {
+		return out, fmt.Errorf("resolve Lore range %q..%q: %w", spec.Base, spec.Head, err)
+	}
+	base, err := r.revision(ctx, spec.Base)
+	if err != nil {
+		return out, fmt.Errorf("resolve Lore range %q..%q: %w", spec.Base, spec.Head, err)
+	}
+	out = vcs.ResolvedReview{
+		Provider:     "lore",
+		RepositoryID: head.Repository,
+		Spec:         spec,
+		Base:         base.Revision,
+		Head:         head.Revision,
+		Content:      vcs.ContentRef{Revision: head.Revision},
+	}
+	if out.Base == zeroRevision {
+		out.Base, out.BaseIsEmpty = "", true
+	}
+	return out, nil
+}
+
+// branchNames returns the repository's branch names from `lore branch list`.
+func (r *Repository) branchNames(ctx context.Context) (map[string]bool, error) {
+	names := map[string]bool{}
+	err := r.events(ctx, func(tag string, data json.RawMessage) error {
+		if tag != "branchListEntry" {
+			return nil
+		}
+		var entry struct {
+			Name string
+		}
+		if err := json.Unmarshal(data, &entry); err != nil {
+			return err
+		}
+		names[entry.Name] = true
+		return nil
+	}, "branch", "list")
+	if err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
+// resolveBranchRange resolves two branch names through Lore's common-ancestor
+// computation. The request then reviews exactly the branch's own revisions:
+// common ancestor as base, source branch head as head.
+func (r *Repository) resolveBranchRange(ctx context.Context, spec vcs.ReviewSpec) (vcs.ResolvedReview, error) {
+	var out vcs.ResolvedReview
+	var begin struct {
+		SourceRevision string
+		BaseRevision   string
+	}
+	err := r.events(ctx, func(tag string, data json.RawMessage) error {
+		if tag == "branchDiffBegin" {
+			return json.Unmarshal(data, &begin)
+		}
+		return nil
+	}, "branch", "diff", spec.Base, "--source", spec.Head)
+	if err != nil {
+		return out, fmt.Errorf("resolve Lore branches %q..%q: %w", spec.Base, spec.Head, err)
+	}
+	switch {
+	case begin.SourceRevision == "" || begin.BaseRevision == "":
+		return out, fmt.Errorf("resolve Lore branches %q..%q: lore reported no branch comparison", spec.Base, spec.Head)
+	case begin.BaseRevision == zeroRevision || begin.SourceRevision == zeroRevision:
+		return out, fmt.Errorf("resolve Lore branches %q..%q: branches have no common ancestor", spec.Base, spec.Head)
+	}
+	out = vcs.ResolvedReview{
+		Provider: "lore",
+		Spec:     spec,
+		Base:     begin.BaseRevision,
+		Head:     begin.SourceRevision,
+		Content:  vcs.ContentRef{Revision: begin.SourceRevision},
+	}
+	// branchDiffBegin carries branch IDs, not the repository ID the
+	// manifest records, so ask the status event for it.
+	rev, revErr := r.revision(ctx, "")
+	if revErr != nil {
+		return out, revErr
+	}
+	out.RepositoryID = rev.Repository
 	return out, nil
 }

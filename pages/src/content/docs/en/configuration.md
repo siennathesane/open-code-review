@@ -492,4 +492,4 @@ ocr review --preview
 ocr review --commit 42
 ```
 
-Use `ocr config unset vcs_provider` to return to Git. Lore supports workspace scans and old/new file reads. Merge-base ranges (`--from/--to`) and the `code_search` tool are currently unavailable with Lore.
+Use `ocr config unset vcs_provider` to return to Git. Lore supports workspace scans, revision range reviews (`--from/--to`, compared directly — Lore has no merge-base, so all revisions between the endpoints flatten into one changeset), and old/new file reads. The `code_search` tool is currently unavailable with Lore.

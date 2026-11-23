@@ -23,7 +23,7 @@ func (r *Repository) Changes(ctx context.Context, review vcs.ResolvedReview) (vc
 	if err := review.Spec.Validate(); err != nil {
 		return result, err
 	}
-	if r.scope != "" || review.Provider != "lore" || (review.Spec.Mode != vcs.Workspace && review.Spec.Mode != vcs.Commit && review.Spec.Mode != vcs.TwoRevisions) {
+	if r.scope != "" || review.Provider != "lore" || (review.Spec.Mode != vcs.Workspace && review.Spec.Mode != vcs.Commit && review.Spec.Mode != vcs.MergeBase && review.Spec.Mode != vcs.TwoRevisions) {
 		return result, fmt.Errorf("%w: invalid Lore comparison", vcs.ErrUnsupported)
 	}
 	if (review.Base == "") != review.BaseIsEmpty || (review.Head == "") != (review.Spec.Mode == vcs.Workspace) || review.Head != review.Content.Revision {

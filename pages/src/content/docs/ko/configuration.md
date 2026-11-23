@@ -387,4 +387,4 @@ ocr review --preview
 ocr review --commit 42
 ```
 
-Git으로 돌아가려면 `ocr config unset vcs_provider`를 실행하세요. Lore는 작업 트리 스캔과 변경 전후의 파일 읽기를 지원합니다. 공통 조상 기준 비교(`--from/--to`)와 `code_search` 도구는 현재 지원하지 않습니다.
+Git으로 돌아가려면 `ocr config unset vcs_provider`를 실행하세요. Lore는 작업 트리 스캔, 리비전 범위 검토(`--from/--to`, 공통 조상 개념이 없어 직접 비교하며 양 끝점 사이의 모든 리비전을 하나의 변경 세트로 병합), 변경 전후의 파일 읽기를 지원합니다. `code_search` 도구는 현재 지원하지 않습니다.
